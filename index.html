@@ -298,8 +298,31 @@ const stage = document.getElementById("stage");
 let prevWinners = {}; // num -> winner team, for diff/pop animation
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-function kickoff(node){ // "2026-06-28" + "12:00 UTC-7" -> "28 Jun · 12:00 UTC-7"
+// Parse the feed's "12:00 UTC-4" / "20:00 UTC+5:30" (venue local time with an explicit
+// offset) plus the date into a real UTC instant. Returns a Date, or null if unparseable.
+function kickoffInstant(dateStr, timeStr){
+  const dm = (dateStr||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = (timeStr||"").match(/^(\d{1,2}):(\d{2})(?:\s*UTC([+-])(\d{1,2})(?::(\d{2}))?)?/);
+  if (!dm || !tm) return null;
+  // Offset defaults to UTC (Z) if the feed omits it; sign/hours/minutes otherwise.
+  const sign = tm[3]==="-" ? -1 : 1;
+  const offMin = tm[3] ? sign*(+tm[4]*60 + (+tm[5]||0)) : 0;
+  // UTC ms = wall-clock-as-UTC minus the venue offset.
+  const asUTC = Date.UTC(+dm[1], +dm[2]-1, +dm[3], +tm[1], +tm[2]);
+  const d = new Date(asUTC - offMin*60000);
+  return isNaN(d.getTime()) ? null : d;
+}
+function kickoff(node){ // -> e.g. "28 Jun · 12:00 PDT" in the viewer's own time zone
   if (!node.date) return "Not played yet";
+  const d = kickoffInstant(node.date, node.time);
+  if (d){
+    const day = d.toLocaleDateString([], {day:"numeric", month:"short"});
+    const t = node.time
+      ? d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", timeZoneName:"short"})
+      : "";
+    return t ? `${day} · ${t}` : day;
+  }
+  // Fallback: show the raw feed strings if parsing ever fails.
   const m = node.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const day = m ? `${+m[3]} ${MONTHS[+m[2]-1]}` : node.date;
   return node.time ? `${day} · ${node.time}` : day;
