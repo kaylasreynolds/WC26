@@ -13,6 +13,10 @@
     --muted:#9a948a;
     --gold:#c8a24a;
     --live:#d1493a;
+    /* Host-nation tints for the venue legend + spotlight capsules */
+    --mx:#3d8b57;
+    --us:#5471a8;
+    --ca:#c0563c;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -113,7 +117,8 @@
 
   /* Venue toggle + interactive legend: hovering/tapping a stadium pill spotlights
      its matches on the bracket (everything else fades via .vfilter). Each
-     spotlighted match also gets a gold capsule behind its two participants. */
+     spotlighted match also gets a capsule behind its two participants, tinted
+     by the stadium's host nation (Mexico green / USA blue / Canada red). */
   .conn,.dot,.center-line,.trophy{transition:opacity .2s ease;pointer-events:none}
   /* Capsules stay invisible until spotlighted, but their stroke is always the
      hover/tap hitbox for the match tooltip (pointer-events:stroke hits the
@@ -121,6 +126,9 @@
      pointer so they can't shadow the capsule underneath. */
   .cap{fill:none;stroke:var(--gold);stroke-linecap:round;opacity:0;
     transition:opacity .25s ease;pointer-events:stroke}
+  .cap.mx{stroke:var(--mx)}
+  .cap.us{stroke:var(--us)}
+  .cap.ca{stroke:var(--ca)}
   .stage.vfilter .cap.vhit{opacity:.3}
   .stage.vfilter .flag:not(.vhit){opacity:.18}
   .stage.vfilter .conn:not(.vhit),.stage.vfilter .dot:not(.vhit),
@@ -141,6 +149,10 @@
     border:1px solid rgba(28,27,24,.18);border-radius:999px;padding:3px 10px;cursor:pointer;
     transition:border-color .15s, box-shadow .15s;
   }
+  /* Gentle host-nation tint; hover/selection gold below still wins the border */
+  .venue.mx{background:#eef4ef;border-color:rgba(61,139,87,.4)}
+  .venue.us{background:#eef1f6;border-color:rgba(84,113,168,.4)}
+  .venue.ca{background:#f6efec;border-color:rgba(192,86,60,.4)}
   .venue:hover{border-color:var(--gold)}
   .venue.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
   .venue .n{color:var(--muted);margin-left:6px;font-size:11px}
@@ -236,6 +248,28 @@ const STADIUM = {
   "Vancouver":"Vancouver"
 };
 function venueLabel(ground){ return ground ? (STADIUM[ground] || ground) : ""; }
+
+/* Feed "ground" -> host nation, driving the gentle green/red/blue tint on the
+   legend pills and spotlight capsules. An unknown ground just stays untinted. */
+const NATION = {
+  "Atlanta":"us",
+  "Boston (Foxborough)":"us",
+  "Dallas (Arlington)":"us",
+  "Guadalajara (Zapopan)":"mx",
+  "Houston":"us",
+  "Kansas City":"us",
+  "Los Angeles (Inglewood)":"us",
+  "Mexico City":"mx",
+  "Miami (Miami Gardens)":"us",
+  "Monterrey (Guadalupe)":"mx",
+  "New York/New Jersey (East Rutherford)":"us",
+  "Philadelphia":"us",
+  "San Francisco Bay Area (Santa Clara)":"us",
+  "Seattle":"us",
+  "Toronto":"ca",
+  "Vancouver":"ca"
+};
+function nationClass(ground){ const n = NATION[ground]; return n ? " "+n : ""; }
 
 /* ---- Static bracket skeleton (design §5): match num -> [childNum, childNum].
    Fixed and known in advance; results only overlay on top. R32 (73–88) are
@@ -544,7 +578,7 @@ function render(model){
     const gAttr = `data-ground="${escapeAttr(model[num].ground)}"`;
     // the capsule is also the match's always-on tooltip hitbox, so it carries
     // the same tip data as a flag even while invisible
-    caps += `<path class="cap" ${tipAttrs(tipFor(model,num), model[num].ground)} `+
+    caps += `<path class="cap${nationClass(model[num].ground)}" ${tipAttrs(tipFor(model,num), model[num].ground)} `+
             `stroke-width="${CAP_W[lvl]}" d="${capsulePath(num)}"/>`;
     if (lvl<=4) conns += `<path class="conn" ${gAttr} d="${connectorPath(num)}"/>`;
     const ang = angleOf(num);
@@ -700,7 +734,7 @@ function buildLegend(model){
   const keys = Object.keys(counts).sort((a,b)=>venueLabel(a).localeCompare(venueLabel(b)));
   let html = "";
   for (const g of keys){
-    html += `<button class="venue" data-ground="${escapeAttr(g)}" `+
+    html += `<button class="venue${nationClass(g)}" data-ground="${escapeAttr(g)}" `+
             `title="Click to spotlight · Ctrl/Cmd-click to add">`+
             `${escapeHTML(venueLabel(g))}<span class="n">${counts[g]}</span></button>`;
   }
