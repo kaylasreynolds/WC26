@@ -37,8 +37,10 @@
     font-weight:800;
     letter-spacing:.2px;
   }
-  header .sub{
-    margin-top:4px;color:var(--muted);font-size:13px;
+  /* Desktop: tighten the header so the venue controls sit higher and show more readily */
+  @media (min-width:720px){
+    header{padding:8px 12px 2px}
+    .stage{margin-top:2px}
   }
   /* Square responsive stage that holds the SVG (lines/dots/trophy) and the flag overlay.
      The vw/vh width is only a no-JS fallback: viewport units track browser zoom, which
@@ -175,7 +177,6 @@
 <body>
   <header>
     <h1>World Cup 2026</h1>
-    <div class="sub">Knockout bracket</div>
   </header>
 
   <div class="stage" id="stage" aria-label="World Cup 2026 knockout bracket"></div>
