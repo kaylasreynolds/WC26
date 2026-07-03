@@ -80,10 +80,16 @@
   .flag.win{border-color:var(--gold)}
   .flag.pop{animation:pop .55s cubic-bezier(.2,1.5,.4,1)}
   @keyframes pop{0%{transform:translate(-50%,-50%) scale(.1);opacity:0}60%{transform:translate(-50%,-50%) scale(1.18)}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
-  /* Subtle status cues for the two teams about to play a match.
-     .soon = static soft gold ring; .live = gently pulsing red halo. */
+  /* Subtle status cues for the two teams about to play a match. .soon = soft
+     static gold ring (today, <12h); .deck = the same gold gently pulsing (on
+     deck, <4h); .live = pulsing red halo. */
   .flag.soon{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold),0 1px 3px rgba(0,0,0,.18)}
+  .flag.deck{border-color:var(--gold);animation:deckPulse 1.9s ease-in-out infinite}
   .flag.live{border-color:var(--live);animation:livePulse 1.7s ease-in-out infinite}
+  @keyframes deckPulse{
+    0%,100%{box-shadow:0 0 0 2px var(--gold),0 0 5px 1px rgba(200,162,74,.30),0 1px 3px rgba(0,0,0,.18)}
+    50%{box-shadow:0 0 0 3px var(--gold),0 0 12px 4px rgba(200,162,74,.55),0 1px 3px rgba(0,0,0,.18)}
+  }
   @keyframes livePulse{
     0%,100%{box-shadow:0 0 0 2px var(--live),0 0 5px 1px rgba(209,73,58,.30),0 1px 3px rgba(0,0,0,.18)}
     50%{box-shadow:0 0 0 3px var(--live),0 0 12px 4px rgba(209,73,58,.55),0 1px 3px rgba(0,0,0,.18)}
@@ -436,7 +442,7 @@ window.addEventListener("resize", ()=>{
   fitStage();
 });
 let prevWinners = {}; // num -> winner team, for diff/pop animation
-let nowMs = Date.now(); // one consistent clock per render, for live/soon highlighting
+let nowMs = Date.now(); // one consistent clock per render, for live/deck/soon highlighting
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 // Parse the feed's "12:00 UTC-4" / "20:00 UTC+5:30" (venue local time with an explicit
@@ -469,11 +475,13 @@ function kickoff(node){ // -> e.g. "28 Jun · 12:00 PDT" in the viewer's own tim
   return node.time ? `${day} · ${node.time}` : day;
 }
 // Highlight windows: a match is "live" from kickoff until this long after (covers
-// play + the feed's own lag before a final score lands); "soon" this far ahead.
+// play + the feed's own lag before a final score lands); ahead of kickoff it's
+// "deck" (on deck, imminent) then "soon" (today) as the ramp widens out.
 const LIVE_MS = 150*60000; // 2.5 h
-const SOON_MS = 120*60000; // 2 h
-// "live" | "soon" | "" for a match node, based on the viewer's clock. Only matches
-// with both teams known and no result yet can be highlighted.
+const DECK_MS = 240*60000; // 4 h
+const SOON_MS = 720*60000; // 12 h
+// "live" | "deck" | "soon" | "" for a match node, based on the viewer's clock.
+// Only matches with both teams known and no result yet can be highlighted.
 function matchStatus(node, now){
   if (!node || node.label) return "";               // already has a score -> finished
   if (!node.participants[0] || !node.participants[1]) return ""; // teams not set yet
@@ -481,7 +489,8 @@ function matchStatus(node, now){
   if (!d) return "";
   const diff = d.getTime() - now;                   // ms until kickoff (<0 = under way)
   if (diff <= 0) return now < d.getTime() + LIVE_MS ? "live" : "";
-  return diff <= SOON_MS ? "soon" : "";
+  if (diff <= DECK_MS) return "deck";               // imminent (<4 h)
+  return diff <= SOON_MS ? "soon" : "";             // today (<12 h)
 }
 // tooltip fields for a match node (same match backs both its outer flags and its winner flag)
 function tipFor(model, num){
@@ -490,7 +499,7 @@ function tipFor(model, num){
   return { round:roundName(num), teams, score:n.label, when:n.label?"":kickoff(n),
            status:matchStatus(n, nowMs), venue:venueLabel(n.ground) };
 }
-// leading-space CSS class for a tip's live/soon state (""/" live"/" soon")
+// leading-space CSS class for a tip's status (""/" live"/" deck"/" soon")
 function hlClass(tip){ return tip.status ? " "+tip.status : ""; }
 // data attributes carrying a tip onto an element (flag or capsule). data-venue
 // is the tooltip's match venue; data-ground is the match AT this element's
@@ -675,8 +684,9 @@ function showTip(el, ev){
     scoreHTML = `<div class="tt-score live"><span class="live-dot"></span>Live</div>`
               + (d.when ? `<div class="tt-soon">Kicked off · ${escapeHTML(d.when)}</div>` : "");
   } else {
+    const ahead = d.status === "deck" ? "On deck" : d.status === "soon" ? "Today" : "";
     scoreHTML = `<div class="tt-score pending">${escapeHTML(d.when || "Not played yet")}</div>`
-              + (d.status === "soon" ? `<div class="tt-soon">Starting soon</div>` : "");
+              + (ahead ? `<div class="tt-soon">${ahead}</div>` : "");
   }
   tipEl.innerHTML =
     (d.round ? `<div class="tt-round">${escapeHTML(d.round)}</div>` : "") +
