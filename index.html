@@ -95,9 +95,13 @@
     15%{box-shadow:0 0 0 3px var(--live),0 0 12px 4px rgba(209,73,58,.55),0 1px 3px rgba(0,0,0,.18)}
   }
 
-  /* Custom hover/tap tooltip showing the match score */
+  /* Custom hover/tap tooltip showing the match score. Positioned absolutely in
+     document coordinates, NOT fixed: when a phone is pinch-zoomed the visual and
+     layout viewports disagree, and browsers don't agree on which one client
+     coordinates or fixed elements are relative to — document coordinates are the
+     one space they all share. */
   .tooltip{
-    position:fixed;z-index:50;pointer-events:none;
+    position:absolute;z-index:50;pointer-events:none;
     background:#1c1b18;color:#f2ede1;
     padding:7px 12px;border-radius:10px;
     font-size:13px;line-height:1.35;text-align:center;white-space:nowrap;
@@ -450,7 +454,12 @@ const stage = document.getElementById("stage");
    skip re-fitting when the resize came from zoom (devicePixelRatio changed)
    so the bracket scales with the rest of the page. */
 function fitStage(){
-  const s = Math.min(window.innerWidth*0.94, window.innerHeight*0.86, 920);
+  // Layout-viewport dimensions, not window.inner*: on phones, pinch zoom shrinks
+  // window.innerWidth to the visual viewport and fires resize, which used to
+  // refit the bracket to the zoomed-in size and shift every tooltip anchor.
+  // documentElement.client* ignores pinch zoom entirely.
+  const de = document.documentElement;
+  const s = Math.min(de.clientWidth*0.94, de.clientHeight*0.86, 920);
   stage.style.width = s + "px";
 }
 let stageDPR = window.devicePixelRatio || 1;
@@ -459,6 +468,7 @@ window.addEventListener("resize", ()=>{
   const dpr = window.devicePixelRatio || 1;
   if (dpr !== stageDPR){ stageDPR = dpr; return; } // zoom, not a resize
   fitStage();
+  hideTip(); // a real resize (e.g. phone rotation) relayouts the anchors
 });
 let prevWinners = {}; // num -> winner team, for diff/pop animation
 let nowMs = Date.now(); // one consistent clock per render, for live/deck/soon highlighting
@@ -728,15 +738,23 @@ function showTip(el, ev){
   tipEl.classList.add("on");
 }
 /* Flags anchor the tip above their own center. Capsules are long arcs whose
-   bounding box says nothing useful, so their tip anchors at the pointer. */
+   bounding box says nothing useful, so their tip anchors at the pointer.
+   All math is in document (page) coordinates: pageX/Y and rect+scroll agree
+   across engines even when pinch zoom desyncs the visual viewport from the
+   layout viewport, which used to strand the tip near the page's top-left. */
 function positionTip(el, ev){
   const isCap = el.classList.contains("cap");
   const r = isCap ? null : el.getBoundingClientRect();
-  const ax     = isCap ? ev.clientX : r.left + r.width/2;
-  const top    = isCap ? ev.clientY : r.top;
-  const bottom = isCap ? ev.clientY : r.bottom;
-  const cx = Math.min(Math.max(ax, 8), window.innerWidth - 8);
-  const flip = top < 90; // near top edge -> show below the anchor
+  const ax     = isCap ? ev.pageX : r.left + r.width/2 + window.scrollX;
+  const top    = isCap ? ev.pageY : r.top + window.scrollY;
+  const bottom = isCap ? ev.pageY : r.bottom + window.scrollY;
+  // keep the tip inside what's actually on screen (the visual viewport)
+  const vv = window.visualViewport;
+  const vLeft = vv ? vv.pageLeft : window.scrollX;
+  const vTop  = vv ? vv.pageTop  : window.scrollY;
+  const vW    = vv ? vv.width    : window.innerWidth;
+  const cx = Math.min(Math.max(ax, vLeft + 8), vLeft + vW - 8);
+  const flip = top - vTop < 90; // near the visible top edge -> show below the anchor
   tipEl.classList.toggle("below", flip);
   tipEl.style.left = cx + "px";
   tipEl.style.top  = (flip ? bottom : top) + "px";
